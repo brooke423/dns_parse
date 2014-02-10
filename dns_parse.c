@@ -45,6 +45,52 @@ int record_dns_statistics(){
     return 0;
 }
 
+static char dec2hex(int i)
+{
+    switch (i) 
+    {   
+
+        case 0 ... 9:
+            return (char)(i + '0');
+            break;
+
+        case 10 ... 15: 
+            return (char)(i - 10 + 'a');
+            break;
+
+        default:
+            printf("Problem in dec2hex\n");
+            return '\0';
+    }   
+
+}
+
+/* domain_print
+ * convert special byte to hex mode
+ * */
+void domain_print(FILE *fp, char *s, int g_len)
+{
+    /*resize a byte to 5 bytes for hex_print,max size*/
+    int len = g_len;
+    int i;
+
+    for(i = 0; i < len; i++)
+    {   
+        /*They must start with a letter, end with a letter or digit, 
+         *and have as interior characters only letters, digits, and hyphen.
+         **/
+        if((s[i] >= 'a' && s[i] <= 'z') || \
+                (s[i] >= 'A' && s[i] <= 'Z') || \
+                (s[i] >= '0' && s[i] <= '9') || \
+                s[i] == '-' || s[i] == '.'){
+            fprintf(fp,"%c",s[i]);
+        }else{
+            fprintf(fp,"\\x%c%c",dec2hex(s[i]/16)?:'0',dec2hex(s[i]%16)?:'0');
+        }   
+    }   
+    return;
+}
+
 int record_dns_desc(struct dns_desc_item * item){
     int i;
     time_t ctime=time(NULL);
@@ -57,7 +103,7 @@ int record_dns_desc(struct dns_desc_item * item){
             printf("error to open file:%s\n",dns_parse_log_path);
             return -1;
         }
-        fprintf(flog,"file=%s dns_query=%llu dns_response=%llu non_ip=%llu non_udp=%llu non_dns=%llu error=%llu\n",\
+        fprintf(flog,"file=%s dns_query=%lludns_response=%llu non_ip=%llu non_udp=%llu non_dns=%llu error=%llu\n",\
                 dns_parse_result_path,g_dns_statistics.dns_query,g_dns_statistics.dns_response,\
                 g_dns_statistics.non_ip,g_dns_statistics.non_udp,g_dns_statistics.non_dns,\
                 g_dns_statistics.error);
@@ -69,10 +115,12 @@ int record_dns_desc(struct dns_desc_item * item){
         return -1;
     }
 
-    fprintf(fp,"time=%d dstip=%u.%u.%u.%u srcip=%u.%u.%u.%u type=%s questions=",\
-            (int)ctime,NIPQUAD(item->ip_dst),NIPQUAD(item->ip_src),item->dh.qr==0?"query":"response");
+    fprintf(fp,"time=%d dstip=%u.%u.%u.%u srcip=%u.%u.%u.%u type=%s dns_id=%x questions=",\
+            (int)ctime,NIPQUAD(item->ip_dst),NIPQUAD(item->ip_src),\
+            item->dh.qr==0?"query":"response",item->dh.id);
     for(i = 0; i < item->dh.question_cnt; i++){
-        fprintf(fp,"%s,",item->dq[i].qname); 
+        domain_print(fp,item->dq[i].qname,strlen(item->dq[i].qname));
+        fprintf(fp,",");
     }
     
     /*answer*/
@@ -80,10 +128,14 @@ int record_dns_desc(struct dns_desc_item * item){
     for(i = 0; i < item->dh.answer_cnt; i++){
         switch(item->da[i].type){
             case DNS_ANSWER_TYPE_A:
-                fprintf(fp,"%s:HOST:%u.%u.%u.%u,",item->da[i].name,NIPQUAD(item->da[i].rdata.host));
+                domain_print(fp,item->da[i].name,strlen(item->da[i].name));
+                fprintf(fp,":HOST:%u.%u.%u.%u,",NIPQUAD(item->da[i].rdata.host));
                 break;
             case DNS_ANSWER_TYPE_CNAME:
-                fprintf(fp,"%s:CNAME:%s,",item->da[i].name,item->da[i].rdata.cname);
+                domain_print(fp,item->da[i].name,strlen(item->da[i].name));
+                fprintf(fp,":CNAME:");
+                domain_print(fp,item->da[i].rdata.cname,strlen(item->da[i].rdata.cname));
+                fprintf(fp,",");
                 break;
             default:
                 break;
