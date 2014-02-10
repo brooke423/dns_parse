@@ -1,0 +1,6 @@
+this is a test program to parse dns packet
+
+@author brooke
+
+@input -- pcap file
+@output -- file which save dns query and dns response
