@@ -20,6 +20,8 @@
 #define QUESTIONS_COUNT_LIMIT          10
 #define ANSWERS_COUNT_LIMIT          50
 
+#define DNS_PATH                "/opt/"
+
 typedef unsigned long long __u64;
 typedef unsigned int       __u32;
 typedef unsigned short __u16;
@@ -118,5 +120,14 @@ enum dns_answer_type{
 	DNS_ANSWER_TYPE_MD,
 	DNS_ANSWER_TYPE_MF,
 	DNS_ANSWER_TYPE_CNAME,
+};
+
+struct dns_statistics{
+    __u64 dns_query;
+    __u64 dns_response;
+    __u64 non_ip;
+    __u64 non_udp;
+    __u64 non_dns;
+    __u64 error;
 };
 #endif

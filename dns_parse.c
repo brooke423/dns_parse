@@ -1,116 +1,93 @@
-#include <time.h>
-#include <sys/ioctl.h>
-#include <sys/time.h>
-#include <netdb.h>
-#include <arpa/inet.h>
-#include <netinet/tcp.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <string.h>
+#include "dns_parse.h"
 
-#define PKT_DATA_OOB            20              /* 12bytes + 7bytes + 1bytes */
-#define UDP_HEADLEN             8
-#define DOMAIN_LEN              256
-#define QUESTION_LIMIT          10
+struct dns_statistics g_dns_statistics = {0,};
 
-typedef unsigned long long __u64;
-typedef unsigned int       __u32;
-typedef unsigned short __u16;
-typedef unsigned char __u8;
+/*
+ * @return value
+ * 1  -- change new file (per hour)
+ * 0  -- use old file
+ * */
+int new_logfile(char * path, time_t tim){
+    struct tm  *ptm;
+    int    y,m,d,h;
+    static int oldh = 0;
+    static int non_first_run = 0;
 
-#ifndef NIPQUAD
-#define NIPQUAD( _addr_ ) \
-    ((unsigned char *)&( _addr_ ) )[0], \
-    ((unsigned char *)&( _addr_ ) )[1], \
-    ((unsigned char *)&( _addr_ ) )[2], \
-    ((unsigned char *)&( _addr_ ) )[3]
-#endif
+    ptm = localtime(&tim);
+    y = ptm->tm_year+1900;
+    m = ptm->tm_mon+1; 
+    d = ptm->tm_mday;
+    h = ptm->tm_hour;
 
-struct cap_header {                     
-    __u32 magic;                         /* 0xa1b2c3d4 */
-    short version_major;
-    short version_minor;
-    int zone;                                   /* gmt to local correct */
-    int timestamps;                             /* accuracy of time tamps */
-    int snaplen;                                /* max length saved portion of pkt */
-    int linktype;                               /* LINKTYPE_* */
-};
-
-struct cap_item {                           
-    int sec;                                    /* time stamp */
-    int usec;                                   /* time stamp */
-    int cap_len;                                /* present length */
-    int wire_len;                               /* wire length */
-};
-
-struct dns_header{
-    __u16 id;
-    __u16 qr;                                    /*specifies whether this message is a query (0), or a response (1).*/
-    __u16 question_cnt;
-    __u16 answer_cnt;
-};
-
-struct dns_question{
-    char qname[DOMAIN_LEN];
-    short qtype;
-    short qclass;
-};
-
-struct dns_desc_item{
-    int timestamps;
-    int ip_src;
-    int ip_dst;
-    struct dns_header dh; 
-    struct dns_question dq[QUESTION_LIMIT];
-    char request[DOMAIN_LEN]; 
-};
-
-typedef struct _udp_header_s
-{
-    __u16 source;
-    __u16 dest;
-    __u16 len;
-    __u16 check;
-}_udp_header_t;
-
-enum cmd_para{
-	PARA_CAP_FILE = 1,
-	PARA_INTERVAL,
-	PARA_COUNT,
-	PARA_MAX
-};
-
-void show_packet(__u8 *data, size_t len)
-{
-    size_t i;
-    for (i = 0; i < len; i++) {
-        if (i && (i & 15) == 0)
-            printf("\n");
-        printf("%02x ", data[i]);
+    snprintf(path,256,DNS_PATH"%04d%02d%02d%02d.log",y,m,d,h);
+    if(oldh != h && non_first_run){
+        oldh = h;
+        return 1;
+    }else{
+        return 0;
     }
-    printf("\n");
-    return;
+    non_first_run = 1;
+    return 0;
 }
 
-
-int record_dns_desc(struct dns_desc_item * item){
-    time_t ctime=time(NULL);
-    FILE *fp=fopen("/root/dns.log","a+");
-    if(!fp){
-        printf("error to open file:%s\n","/root/dns.log");
+int record_dns_statistics(){
+    char* dns_parse_log_path = DNS_PATH"dns_parse_statistics.log";
+    FILE *flog = fopen(dns_parse_log_path,"a+");
+    if(!flog){
+        printf("error to open file:%s\n",dns_parse_log_path);
         return -1;
     }
+    fprintf(flog,"--last dns_query=%llu dns_response=%llu non_ip=%llu non_udp=%llu non_dns=%llu error=%llu\n",\
+            g_dns_statistics.dns_query,g_dns_statistics.dns_response,\
+            g_dns_statistics.non_ip,g_dns_statistics.non_udp,g_dns_statistics.non_dns,\
+            g_dns_statistics.error);
+    fclose(flog);
+    return 0;
+}
 
+int record_dns_desc(struct dns_desc_item * item){
     int i;
-    
+    time_t ctime=time(NULL);
+    char dns_parse_result_path[256];
+    char* dns_parse_log_path = DNS_PATH"dns_parse_statistics.log";
+
+    if(new_logfile(dns_parse_result_path,ctime)){
+        FILE *flog = fopen(dns_parse_log_path,"a+");
+        if(!flog){
+            printf("error to open file:%s\n",dns_parse_log_path);
+            return -1;
+        }
+        fprintf(flog,"file=%s dns_query=%llu dns_response=%llu non_ip=%llu non_udp=%llu non_dns=%llu error=%llu\n",\
+                dns_parse_result_path,g_dns_statistics.dns_query,g_dns_statistics.dns_response,\
+                g_dns_statistics.non_ip,g_dns_statistics.non_udp,g_dns_statistics.non_dns,\
+                g_dns_statistics.error);
+        fclose(flog);
+    }
+    FILE *fp=fopen(dns_parse_result_path,"a+");
+    if(!fp){
+        printf("error to open file:%s\n",dns_parse_result_path);
+        return -1;
+    }
 
     fprintf(fp,"time=%d dstip=%u.%u.%u.%u srcip=%u.%u.%u.%u type=%s questions=",\
             (int)ctime,NIPQUAD(item->ip_dst),NIPQUAD(item->ip_src),item->dh.qr==0?"query":"response");
     for(i = 0; i < item->dh.question_cnt; i++){
         fprintf(fp,"%s,",item->dq[i].qname); 
+    }
+    
+    /*answer*/
+    fprintf(fp," answers=");
+    for(i = 0; i < item->dh.answer_cnt; i++){
+        switch(item->da[i].type){
+            case DNS_ANSWER_TYPE_A:
+                fprintf(fp,"%s:HOST:%u.%u.%u.%u,",item->da[i].name,NIPQUAD(item->da[i].rdata.host));
+                break;
+            case DNS_ANSWER_TYPE_CNAME:
+                fprintf(fp,"%s:CNAME:%s,",item->da[i].name,item->da[i].rdata.cname);
+                break;
+            default:
+                break;
+        }
     }
     fprintf(fp,"\n");
 
@@ -119,12 +96,23 @@ int record_dns_desc(struct dns_desc_item * item){
     return 0;
 }
 
-/*
- *parse dns format to domain  
- * hex  ----->  string
- *03 77 77 77 05 62 61 69 64 75 03 63 6f 6d 00 ----->  www.baidu.com
+/*@fuction
+ * int __pkt_parse_domain(__u8 *pdomain, char *result)
+ *
+ *@description
+ *  parse dns format to domain without compression 
+ *  hex  ----->  string
+ *  03 77 77 77 05 62 61 69 64 75 03 63 6f 6d 00 ----->  www.baidu.com
+ *  
+ *  __u8 *pdomain -- pointer to dns domain
+ *  char *result  -- pointer to dns_desc_item dq or da
+ *  int *sz     -- the count of bytes parse 
+ *
+ *@return value 
+ *  0             -- sucess 
+ *  1             -- zip mode,pointer need parse later
  * */
-int pkt_parse_domain(__u8 *pdomain, char *result)
+int __pkt_parse_domain(__u8 *pdomain, char *result, int *sz)
 {
     __u8 c = 0;
     __u16 read = 0;
@@ -136,39 +124,135 @@ int pkt_parse_domain(__u8 *pdomain, char *result)
             read += (c + 1);
             pdomain += c;
             //printf("read=%d  c=%d %02x\n",read,c,*pdomain);
-        }else{ /*end*/
-            result[read-1] = '\0';
+        }else if(c > 63){
+            /*zip pointer, non end*/
+            *sz = read;
+            return 1;
+        }else if(c == 0){ 
+            /*end,return read size with one byte plus('\0')*/
+            if(read > 1){
+                result[read-1] = '\0';
+            }
+            *sz = read + 1;
+            return 0;
+        }else{
+            //unknown
+            printf("unknown byte!!!\n");
+            *sz = read;
             break;
         }
     }
     return 0;
 }
 
-int pkt_parse_dns(struct dns_desc_item *item, char *buf, __u16 len)
+
+
+/*@fuction
+ * int pkt_parse_domain(__u8 *pdomain, char *result,char *l7_hdr)
+ *
+ *@description
+ *  parse dns format to domain with compression 
+ *   The compression scheme allows a domain name in a message to be
+ *   represented as either:
+ *   - a sequence of labels ending in a zero octet
+ *   - a pointer
+ *   - a sequence of labels ending with a pointer
+ *
+ * */
+int pkt_parse_domain(__u8 *pdomain, char *result, char *l7_hdr)
 {
-    __u16 *ptransid=(__u16 *)buf;
+    int sz = 0;
+    int total_sz = 0;  /*must use first value*/
+    __u8 *pcur = pdomain;
+    char *pres = result;
+
+    __u16 offset;
+
+    while(__pkt_parse_domain(pcur,pres,&sz)){
+        if(sz){
+            /* - a sequence of labels ending with a pointer */
+            pcur += sz;
+            pres += sz;
+            if(0 == total_sz){
+                total_sz = sz + 2; /*sz  plus sizeof(offset)*/
+            }
+        }else{
+            /* - a pointer */
+            if(0 == total_sz){
+                total_sz = 2; /*sz  plus sizeof(offset)*/
+            }
+        }
+        offset = (ntohs(*(__u16 *)pcur)) & 0x3fff;   /*pointer offset*/
+        pcur = (__u8 *)l7_hdr + offset;
+    }
+
+    if(0 == total_sz){
+        /* - a sequence of labels ending in a zero octet */
+        total_sz = sz;
+    }
+
+    return total_sz ;
+}
+
+int pkt_parse_dns(struct dns_desc_item *item, char *l7_hdr, __u16 len)
+{
+    __u16 *ptransid=(__u16 *)l7_hdr;
     item->dh.id = *ptransid;
     __u16 *cnt = ptransid + 2;
-    item->dh.question_cnt = (ntohs)(*cnt);
+    item->dh.question_cnt = ntohs(*cnt);
     cnt = ptransid + 3;
-    item->dh.answer_cnt = (ntohs)(*cnt);
+    item->dh.answer_cnt = ntohs(*cnt);
 
     __u8 cQA  = *(__u8 *)(ptransid + 1);
     __u8 *pquestion = (__u8 *)(ptransid + 6); /*header len is 12bytes*/
     len -= 12;
     int i = 0;
     if ((cQA & 0x80) == 0 ){/*dns request*/
+        item->dh.qr = 0;
         for(i = 0; i < item->dh.question_cnt; i++){
-            pkt_parse_domain(pquestion,item->dq[i].qname);
-            pquestion += strlen(item->dq[i].qname) + 2;
-            item->dq[i].qtype = (ntohs)(*(__u16 *)pquestion);
+            pquestion += pkt_parse_domain(pquestion,item->dq[i].qname,l7_hdr);
+            item->dq[i].qtype = ntohs(*(__u16 *)pquestion);
             pquestion += 2;
-            item->dq[i].qclass = (ntohs)(*(__u16 *)pquestion);
+            item->dq[i].qclass = ntohs(*(__u16 *)pquestion);
             pquestion += 2;
         }
+        g_dns_statistics.dns_query++;
         record_dns_desc(item);
     }else{/*response*/
-        //todo
+        item->dh.qr = 1;
+        for(i = 0; i < item->dh.question_cnt; i++){
+            pquestion += pkt_parse_domain(pquestion,item->dq[i].qname,l7_hdr);
+            item->dq[i].qtype = ntohs(*(__u16 *)pquestion);
+            pquestion += 2;
+            item->dq[i].qclass = ntohs(*(__u16 *)pquestion);
+            pquestion += 2;
+        }
+        for(i = 0; i < item->dh.answer_cnt; i++){
+            pquestion += pkt_parse_domain(pquestion,item->da[i].name,l7_hdr);
+            item->da[i].type = ntohs(*(__u16 *)pquestion);
+            pquestion += 2;
+            item->da[i].class = ntohs(*(__u16 *)pquestion);
+            pquestion += 2;
+            item->da[i].ttl = (ntohl)(*(__u32 *)pquestion);
+            pquestion += 4;
+            item->da[i].rdlength = ntohs(*(__u16 *)pquestion);
+            pquestion += 2;
+            switch(item->da[i].type){
+                case DNS_ANSWER_TYPE_A:
+                    item->da[i].rdata.host = *(__u32 *)pquestion;
+                    pquestion += 4;
+                    break;
+                case DNS_ANSWER_TYPE_CNAME:
+                    pquestion += pkt_parse_domain(pquestion,item->da[i].rdata.cname,l7_hdr);
+                    break;
+                default:
+                    printf("Error:unsupport answer type!!!\n");
+                    g_dns_statistics.error++;
+                    return -1;
+            }
+        }
+        g_dns_statistics.dns_response++;
+        record_dns_desc(item);
     }
     return 0;
 }
@@ -198,13 +282,13 @@ int pkt_parse_head(struct dns_desc_item *item, char *pkt, int len)
             if(ntohs(l4_hdr->dest) == 53 || ntohs(l4_hdr->source) == 53){
                 pkt_parse_dns(item, l7_hdr, l7_len); 
             }else{
-                //todo non-dns
+                g_dns_statistics.non_dns++;
             }
         }else{
-            //todo non-udp 
+            g_dns_statistics.non_udp++;
         }
     }else{
-        //todo non-ip
+        g_dns_statistics.non_ip++;
     }
     return 0;
 }
@@ -240,9 +324,7 @@ int main(int argc, char *argv[])
 			input[0] = item_head.wire_len;
 		
             count++;
-            show_packet((__u8 *)buf+sizeof(int),input[0]);
             pkt_parse_head(&mitem,(char *)buf+sizeof(int),input[0]);
-            printf("------------------------------------------------------------\n\n");
             if(count >= times){
                 break;
             }
@@ -250,5 +332,6 @@ int main(int argc, char *argv[])
 		}
 	}while(count < times);	/* ÏÞÊ± */
 	fclose(cap_file);
+    record_dns_statistics();
     return 0;
 }
