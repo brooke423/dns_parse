@@ -96,7 +96,6 @@ typedef struct _udp_header_s
 
 enum cmd_para{
 	PARA_CAP_FILE = 1,
-	PARA_INTERVAL,
 	PARA_COUNT,
 	PARA_MAX
 };

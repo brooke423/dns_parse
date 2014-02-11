@@ -31,9 +31,6 @@ int new_logfile(char * path, time_t tim){
 }
 
 int record_dns_statistics(){
-    #ifdef PERF_DEBUG
-    return 0;
-    #endif
     char* dns_parse_log_path = DNS_PATH"dns_parse_statistics.log";
     FILE *flog = fopen(dns_parse_log_path,"a+");
     if(!flog){
@@ -100,9 +97,6 @@ int record_dns_desc(struct dns_desc_item * item){
     char dns_parse_result_path[256];
     char* dns_parse_log_path = DNS_PATH"dns_parse_statistics.log";
 
-    #ifdef PERF_DEBUG
-    return 0;
-    #endif
     if(new_logfile(dns_parse_result_path,ctime)){
         FILE *flog = fopen(dns_parse_log_path,"a+");
         if(!flog){
@@ -356,20 +350,19 @@ int main(int argc, char *argv[])
 {
 	char buf[2048];
 	FILE *cap_file;
-	long speed, times;
+	long times;
 	int *input = (void*)buf;
 	struct cap_header file_head = {0,};
 	struct cap_item item_head = {0,};
 	
 	if(argc != PARA_MAX)
-		return printf("Userage ./user_drv <cap file> <interval(ms)> <count>\n");
+		return printf("Userage ./user_drv <cap file> <count>\n");
 	if(NULL == (cap_file = fopen(argv[PARA_CAP_FILE], "rb")))
 		return printf("Error: open %s error.\n", argv[PARA_CAP_FILE]);
 	(void)fread(&file_head, 1, sizeof(file_head), cap_file);
 	if(file_head.magic != 0xa1b2c3d4 || file_head.version_major != 2 || file_head.version_minor != 4)
 		return printf("Error: invalid version of %s.\n", argv[PARA_CAP_FILE]);
 
-	speed = atoi(argv[PARA_INTERVAL]);
 	times = atoi(argv[PARA_COUNT]);
     
     int count=0;
@@ -383,11 +376,10 @@ int main(int argc, char *argv[])
 			input[0] = item_head.wire_len;
 		
             count++;
-            //pkt_parse_head(&mitem,(char *)buf+sizeof(int),input[0]);
+            pkt_parse_head(&mitem,(char *)buf+sizeof(int),input[0]);
             if(count >= times){
                 break;
             }
-            usleep(speed);
 		}
 	}while(count < times);
 	fclose(cap_file);
