@@ -3,7 +3,7 @@
 #
 
 CC      = gcc 
-CFLAGS  += -Wall -g
+CFLAGS  += -Wall -g -O2
 INCLUDEFLAGS = 
 LDFLAGS = 
 OBJS    = dns_parse.o

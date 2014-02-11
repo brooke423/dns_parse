@@ -1,13 +1,15 @@
 #include "dns_parse.h"
 
 struct dns_statistics g_dns_statistics = {0,};
+char g_dns_parse_result_path[256];
+char g_dns_parse_statistics[256];
 
 /*
  * @return value
  * 1  -- change new file (per hour)
  * 0  -- use old file
  * */
-int new_logfile(char * path, time_t tim){
+int new_logfile(time_t tim){
     struct tm  *ptm;
     int    y,m,d,h;
     static int oldh = 0;
@@ -19,22 +21,23 @@ int new_logfile(char * path, time_t tim){
     d = ptm->tm_mday;
     h = ptm->tm_hour;
 
-    snprintf(path,256,DNS_PATH"%04d%02d%02d%02d.log",y,m,d,h);
     if(oldh != h && non_first_run){
+        snprintf(g_dns_parse_result_path,256,DNS_PATH"%04d%02d%02d%02d.log",y,m,d,h);
         oldh = h;
         return 1;
+    }else if(non_first_run){
+        return 0;
     }else{
+        snprintf(g_dns_parse_result_path,256,DNS_PATH"%04d%02d%02d%02d.log",y,m,d,h);
+        non_first_run = 1;
         return 0;
     }
-    non_first_run = 1;
-    return 0;
 }
 
 int record_dns_statistics(){
-    char* dns_parse_log_path = DNS_PATH"dns_parse_statistics.log";
-    FILE *flog = fopen(dns_parse_log_path,"a+");
+    FILE *flog = fopen(g_dns_parse_statistics,"a+");
     if(!flog){
-        printf("error to open file:%s\n",dns_parse_log_path);
+        printf("error to open file:%s\n",g_dns_parse_statistics);
         return -1;
     }
     fprintf(flog,"--last dns_query=%llu dns_response=%llu non_ip=%llu non_udp=%llu non_dns=%llu error=%llu\n",\
@@ -45,7 +48,7 @@ int record_dns_statistics(){
     return 0;
 }
 
-static char dec2hex(__u8 i)
+static inline char dec2hex(__u8 i)
 {
     switch (i) 
     {   
@@ -68,7 +71,7 @@ static char dec2hex(__u8 i)
 /* domain_print
  * convert special byte to hex mode
  * */
-void domain_print(FILE *fp, __u8 *s, int g_len)
+static inline void domain_print(FILE *fp, __u8 *s, int g_len)
 {
     /*resize a byte to 5 bytes for hex_print,max size*/
     int len = g_len;
@@ -94,24 +97,24 @@ void domain_print(FILE *fp, __u8 *s, int g_len)
 int record_dns_desc(struct dns_desc_item * item){
     int i;
     time_t ctime=time(NULL);
-    char dns_parse_result_path[256];
-    char* dns_parse_log_path = DNS_PATH"dns_parse_statistics.log";
 
-    if(new_logfile(dns_parse_result_path,ctime)){
-        FILE *flog = fopen(dns_parse_log_path,"a+");
+    if(new_logfile(ctime)){
+        FILE *flog = fopen(g_dns_parse_statistics,"a+");
         if(!flog){
-            printf("error to open file:%s\n",dns_parse_log_path);
+            printf("error to open file:%s\n",g_dns_parse_statistics);
             return -1;
         }
         fprintf(flog,"file=%s dns_query=%lludns_response=%llu non_ip=%llu non_udp=%llu non_dns=%llu error=%llu\n",\
-                dns_parse_result_path,g_dns_statistics.dns_query,g_dns_statistics.dns_response,\
+                g_dns_parse_result_path,g_dns_statistics.dns_query,g_dns_statistics.dns_response,\
                 g_dns_statistics.non_ip,g_dns_statistics.non_udp,g_dns_statistics.non_dns,\
                 g_dns_statistics.error);
         fclose(flog);
     }
-    FILE *fp=fopen(dns_parse_result_path,"a+");
+
+    //printf("%s\n",g_dns_parse_result_path);
+    FILE *fp=fopen(g_dns_parse_result_path,"a+");
     if(!fp){
-        printf("error to open file:%s\n",dns_parse_result_path);
+        printf("error to open file:%s\n",g_dns_parse_result_path);
         return -1;
     }
 
@@ -142,7 +145,6 @@ int record_dns_desc(struct dns_desc_item * item){
         }
     }
     fprintf(fp,"\n");
-
 
     fclose(fp);
     return 0;
@@ -364,7 +366,9 @@ int main(int argc, char *argv[])
 		return printf("Error: invalid version of %s.\n", argv[PARA_CAP_FILE]);
 
 	times = atoi(argv[PARA_COUNT]);
-    
+    strncpy(g_dns_parse_result_path,"/opt/dns_parse_result.log",255);
+    strncpy(g_dns_parse_statistics,DNS_PATH"g_dns_parse_statistics.log",255);
+
     int count=0;
     struct dns_desc_item mitem;
 
@@ -380,6 +384,7 @@ int main(int argc, char *argv[])
             if(count >= times){
                 break;
             }
+            //usleep(1);
 		}
 	}while(count < times);
 	fclose(cap_file);
