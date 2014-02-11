@@ -18,7 +18,7 @@
 #define UDP_HEADLEN             8
 #define DOMAIN_LEN              256
 #define QUESTIONS_COUNT_LIMIT          10
-#define ANSWERS_COUNT_LIMIT          50
+#define ANSWERS_COUNT_LIMIT            50
 
 #define DNS_PATH                "/opt/"
 

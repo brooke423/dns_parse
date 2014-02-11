@@ -31,6 +31,9 @@ int new_logfile(char * path, time_t tim){
 }
 
 int record_dns_statistics(){
+    #ifdef PERF_DEBUG
+    return 0;
+    #endif
     char* dns_parse_log_path = DNS_PATH"dns_parse_statistics.log";
     FILE *flog = fopen(dns_parse_log_path,"a+");
     if(!flog){
@@ -45,7 +48,7 @@ int record_dns_statistics(){
     return 0;
 }
 
-static char dec2hex(int i)
+static char dec2hex(__u8 i)
 {
     switch (i) 
     {   
@@ -59,7 +62,7 @@ static char dec2hex(int i)
             break;
 
         default:
-            printf("Problem in dec2hex\n");
+            printf("Problem in dec2hex:%c\n",i);
             return '\0';
     }   
 
@@ -68,7 +71,7 @@ static char dec2hex(int i)
 /* domain_print
  * convert special byte to hex mode
  * */
-void domain_print(FILE *fp, char *s, int g_len)
+void domain_print(FILE *fp, __u8 *s, int g_len)
 {
     /*resize a byte to 5 bytes for hex_print,max size*/
     int len = g_len;
@@ -97,6 +100,9 @@ int record_dns_desc(struct dns_desc_item * item){
     char dns_parse_result_path[256];
     char* dns_parse_log_path = DNS_PATH"dns_parse_statistics.log";
 
+    #ifdef PERF_DEBUG
+    return 0;
+    #endif
     if(new_logfile(dns_parse_result_path,ctime)){
         FILE *flog = fopen(dns_parse_log_path,"a+");
         if(!flog){
@@ -119,7 +125,7 @@ int record_dns_desc(struct dns_desc_item * item){
             (int)ctime,NIPQUAD(item->ip_dst),NIPQUAD(item->ip_src),\
             item->dh.qr==0?"query":"response",item->dh.id);
     for(i = 0; i < item->dh.question_cnt; i++){
-        domain_print(fp,item->dq[i].qname,strlen(item->dq[i].qname));
+        domain_print(fp,(__u8 *)item->dq[i].qname,strlen(item->dq[i].qname));
         fprintf(fp,",");
     }
     
@@ -128,13 +134,13 @@ int record_dns_desc(struct dns_desc_item * item){
     for(i = 0; i < item->dh.answer_cnt; i++){
         switch(item->da[i].type){
             case DNS_ANSWER_TYPE_A:
-                domain_print(fp,item->da[i].name,strlen(item->da[i].name));
+                domain_print(fp,(__u8 *)item->da[i].name,strlen(item->da[i].name));
                 fprintf(fp,":HOST:%u.%u.%u.%u,",NIPQUAD(item->da[i].rdata.host));
                 break;
             case DNS_ANSWER_TYPE_CNAME:
-                domain_print(fp,item->da[i].name,strlen(item->da[i].name));
+                domain_print(fp,(__u8 *)item->da[i].name,strlen(item->da[i].name));
                 fprintf(fp,":CNAME:");
-                domain_print(fp,item->da[i].rdata.cname,strlen(item->da[i].rdata.cname));
+                domain_print(fp,(__u8 *)item->da[i].rdata.cname,strlen(item->da[i].rdata.cname));
                 fprintf(fp,",");
                 break;
             default:
@@ -164,15 +170,15 @@ int record_dns_desc(struct dns_desc_item * item){
  *  0             -- sucess 
  *  1             -- zip mode,pointer need parse later
  * */
-int __pkt_parse_domain(__u8 *pdomain, char *result, int *sz)
+static inline int __pkt_parse_domain(__u8 *pdomain, char *result, int *sz)
 {
     __u8 c = 0;
     __u16 read = 0;
     while(1){
         c = *pdomain++;
         if(c <= 63 && c != 0){
-            strncpy(result+read,(const char *)pdomain, (size_t)c);
-            strcat((char *)result+read+c,"." );
+            memcpy(result+read,(const char *)pdomain, (size_t)c);
+            result[read+c] = '.';
             read += (c + 1);
             pdomain += c;
             //printf("read=%d  c=%d %02x\n",read,c,*pdomain);
@@ -314,8 +320,9 @@ int pkt_parse_head(struct dns_desc_item *item, char *pkt, int len)
     char ip_type, *l3_hdr = pkt + 14;
     __u16 l3_type = ntohs(*(short *)(void *)(pkt + 12));
 
-    memset(item,0,sizeof(struct dns_desc_item));
- 
+    /*performance optimization*/
+    //memset(item,0,sizeof(struct dns_desc_item));
+
     if(l3_type < 0x05dc) {            /* 802.3 type */
         l3_hdr = pkt + 22; 
         l3_type = ntohs(*(short *)(void *)(pkt + 20));
@@ -362,7 +369,7 @@ int main(int argc, char *argv[])
 	if(file_head.magic != 0xa1b2c3d4 || file_head.version_major != 2 || file_head.version_minor != 4)
 		return printf("Error: invalid version of %s.\n", argv[PARA_CAP_FILE]);
 
-	speed = atoi(argv[PARA_INTERVAL]) * 1000;
+	speed = atoi(argv[PARA_INTERVAL]);
 	times = atoi(argv[PARA_COUNT]);
     
     int count=0;
@@ -376,13 +383,13 @@ int main(int argc, char *argv[])
 			input[0] = item_head.wire_len;
 		
             count++;
-            pkt_parse_head(&mitem,(char *)buf+sizeof(int),input[0]);
+            //pkt_parse_head(&mitem,(char *)buf+sizeof(int),input[0]);
             if(count >= times){
                 break;
             }
             usleep(speed);
 		}
-	}while(count < times);	/* ÏÞÊ± */
+	}while(count < times);
 	fclose(cap_file);
     record_dns_statistics();
     return 0;

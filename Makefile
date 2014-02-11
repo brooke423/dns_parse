@@ -3,7 +3,8 @@
 #
 
 CC      = gcc 
-CFLAGS  = -Wall -g 
+CFLAGS  += -Wall -g
+#CFLAGS  += -DPERF_DEBUG
 INCLUDEFLAGS = 
 LDFLAGS = 
 OBJS    = dns_parse.o
