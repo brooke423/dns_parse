@@ -257,6 +257,12 @@ int pkt_parse_dns(struct dns_desc_item *item, char *l7_hdr, __u16 len)
     cnt = ptransid + 3;
     item->dh.answer_cnt = ntohs(*cnt);
 
+    if((item->dh.question_cnt > QUESTIONS_COUNT_LIMIT) || \
+            (item->dh.answer_cnt > ANSWERS_COUNT_LIMIT) ){
+        g_dns_statistics.error++;
+        return -1;
+    }
+
     __u8 cQA  = *(__u8 *)(ptransid + 1);
     __u8 *pquestion = (__u8 *)(ptransid + 6); /*header len is 12bytes*/
     len -= 12;
