@@ -30,9 +30,10 @@ int new_logfile(time_t tim){
     }else if(non_first_run){
         return 0;
     }else{
+        /*first run,change to new path*/
         snprintf(g_dns_parse_result_path,256,DNS_PATH"%04d%02d%02d%02d.log",y,m,d,h);
         non_first_run = 1;
-        return 0;
+        return 1;
     }
 }
 
@@ -110,6 +111,7 @@ int record_dns_desc(struct dns_desc_item * item){
                 g_dns_statistics.error);
 
         /*change new file or first run,basicly unless first run at 0:00*/
+        fclose(g_fp);
         g_fp=fopen(g_dns_parse_result_path,"a+");
         if(!g_fp){
             printf("error to open file:%s\n",g_dns_parse_result_path);
@@ -165,7 +167,7 @@ int record_dns_desc(struct dns_desc_item * item){
  *
  *@return value 
  *  0             -- sucess 
- *  1             -- zip mode,pointer need parse later
+ *  1             -- compression mode,pointer need parse later
  * */
 static inline int __pkt_parse_domain(__u8 *pdomain, char *result, int *sz)
 {
@@ -180,7 +182,7 @@ static inline int __pkt_parse_domain(__u8 *pdomain, char *result, int *sz)
             pdomain += c;
             //printf("read=%d  c=%d %02x\n",read,c,*pdomain);
         }else if(c > 63){
-            /*zip pointer, non end*/
+            /*compression pointer, non end*/
             *sz = read;
             return 1;
         }else if(c == 0){ 
