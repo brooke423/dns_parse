@@ -18,7 +18,7 @@
 #define UDP_HEADLEN             8
 #define DOMAIN_LEN              256
 #define QUESTIONS_COUNT_LIMIT          10
-#define ANSWERS_COUNT_LIMIT            50
+#define ANSWERS_COUNT_LIMIT           100 
 
 #define DNS_PATH                "/opt/"
 
@@ -128,5 +128,6 @@ struct dns_statistics{
     __u64 non_udp;
     __u64 non_dns;
     __u64 error;
+    __u64 cnt_error;
 };
 #endif

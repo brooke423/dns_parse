@@ -40,10 +40,10 @@ int record_dns_statistics(){
         printf("error to open file:%s\n",g_dns_parse_statistics);
         return -1;
     }
-    fprintf(flog,"--last dns_query=%llu dns_response=%llu non_ip=%llu non_udp=%llu non_dns=%llu error=%llu\n",\
+    fprintf(flog,"--last dns_query=%llu dns_response=%llu non_ip=%llu non_udp=%llu non_dns=%llu error=%llu cnt_error=%llu\n",\
             g_dns_statistics.dns_query,g_dns_statistics.dns_response,\
             g_dns_statistics.non_ip,g_dns_statistics.non_udp,g_dns_statistics.non_dns,\
-            g_dns_statistics.error);
+            g_dns_statistics.error,g_dns_statistics.cnt_error);
     fclose(flog);
     return 0;
 }
@@ -259,7 +259,7 @@ int pkt_parse_dns(struct dns_desc_item *item, char *l7_hdr, __u16 len)
 
     if((item->dh.question_cnt > QUESTIONS_COUNT_LIMIT) || \
             (item->dh.answer_cnt > ANSWERS_COUNT_LIMIT) ){
-        g_dns_statistics.error++;
+        g_dns_statistics.cnt_error++;
         return -1;
     }
 
@@ -376,7 +376,11 @@ int main(int argc, char *argv[])
     strncpy(g_dns_parse_statistics,DNS_PATH"g_dns_parse_statistics.log",255);
 
     int count=0;
-    struct dns_desc_item mitem;
+    struct dns_desc_item* pitem = (struct dns_desc_item *)calloc(sizeof(struct dns_desc_item),1);
+    if(!pitem){
+        printf("Error: malloc pitem\n");
+        return -1;
+    }
 
 	do{
 		(void)fseek(cap_file, sizeof(file_head), SEEK_SET);
@@ -386,7 +390,7 @@ int main(int argc, char *argv[])
 			input[0] = item_head.wire_len;
 		
             count++;
-            pkt_parse_head(&mitem,(char *)buf+sizeof(int),input[0]);
+            pkt_parse_head(pitem,(char *)buf+sizeof(int),input[0]);
             if(count >= times){
                 break;
             }
