@@ -3,6 +3,8 @@
 struct dns_statistics g_dns_statistics = {0,};
 char g_dns_parse_result_path[256];
 char g_dns_parse_statistics[256];
+FILE *g_fp;
+FILE *flog;
 
 /*
  * @return value
@@ -35,7 +37,6 @@ int new_logfile(time_t tim){
 }
 
 int record_dns_statistics(){
-    FILE *flog = fopen(g_dns_parse_statistics,"a+");
     if(!flog){
         printf("error to open file:%s\n",g_dns_parse_statistics);
         return -1;
@@ -99,7 +100,6 @@ int record_dns_desc(struct dns_desc_item * item){
     time_t ctime=time(NULL);
 
     if(new_logfile(ctime)){
-        FILE *flog = fopen(g_dns_parse_statistics,"a+");
         if(!flog){
             printf("error to open file:%s\n",g_dns_parse_statistics);
             return -1;
@@ -108,45 +108,46 @@ int record_dns_desc(struct dns_desc_item * item){
                 g_dns_parse_result_path,g_dns_statistics.dns_query,g_dns_statistics.dns_response,\
                 g_dns_statistics.non_ip,g_dns_statistics.non_udp,g_dns_statistics.non_dns,\
                 g_dns_statistics.error);
-        fclose(flog);
+
+        /*change new file or first run,basicly unless first run at 0:00*/
+        g_fp=fopen(g_dns_parse_result_path,"a+");
+        if(!g_fp){
+            printf("error to open file:%s\n",g_dns_parse_result_path);
+            fprintf(flog,"error to open file:%s\n",g_dns_parse_result_path);
+            return -1;
+        }
     }
 
     //printf("%s\n",g_dns_parse_result_path);
-    FILE *fp=fopen(g_dns_parse_result_path,"a+");
-    if(!fp){
-        printf("error to open file:%s\n",g_dns_parse_result_path);
-        return -1;
-    }
 
-    fprintf(fp,"time=%d dstip=%u.%u.%u.%u srcip=%u.%u.%u.%u type=%s dns_id=%x questions=",\
+    fprintf(g_fp,"time=%d dstip=%u.%u.%u.%u srcip=%u.%u.%u.%u type=%s dns_id=%x questions=",\
             (int)ctime,NIPQUAD(item->ip_dst),NIPQUAD(item->ip_src),\
             item->dh.qr==0?"query":"response",item->dh.id);
     for(i = 0; i < item->dh.question_cnt; i++){
-        domain_print(fp,(__u8 *)item->dq[i].qname,strlen(item->dq[i].qname));
-        fprintf(fp,",");
+        domain_print(g_fp,(__u8 *)item->dq[i].qname,strlen(item->dq[i].qname));
+        fprintf(g_fp,",");
     }
     
     /*answer*/
-    fprintf(fp," answers=");
+    fprintf(g_fp," answers=");
     for(i = 0; i < item->dh.answer_cnt; i++){
         switch(item->da[i].type){
             case DNS_ANSWER_TYPE_A:
-                domain_print(fp,(__u8 *)item->da[i].name,strlen(item->da[i].name));
-                fprintf(fp,":HOST:%u.%u.%u.%u,",NIPQUAD(item->da[i].rdata.host));
+                domain_print(g_fp,(__u8 *)item->da[i].name,strlen(item->da[i].name));
+                fprintf(g_fp,":HOST:%u.%u.%u.%u,",NIPQUAD(item->da[i].rdata.host));
                 break;
             case DNS_ANSWER_TYPE_CNAME:
-                domain_print(fp,(__u8 *)item->da[i].name,strlen(item->da[i].name));
-                fprintf(fp,":CNAME:");
-                domain_print(fp,(__u8 *)item->da[i].rdata.cname,strlen(item->da[i].rdata.cname));
-                fprintf(fp,",");
+                domain_print(g_fp,(__u8 *)item->da[i].name,strlen(item->da[i].name));
+                fprintf(g_fp,":CNAME:");
+                domain_print(g_fp,(__u8 *)item->da[i].rdata.cname,strlen(item->da[i].rdata.cname));
+                fprintf(g_fp,",");
                 break;
             default:
                 break;
         }
     }
-    fprintf(fp,"\n");
+    fprintf(g_fp,"\n");
 
-    fclose(fp);
     return 0;
 }
 
@@ -382,6 +383,8 @@ int main(int argc, char *argv[])
         return -1;
     }
 
+    g_fp=fopen("/opt/g_file.log","a+");
+    flog = fopen(g_dns_parse_statistics,"a+");
 	do{
 		(void)fseek(cap_file, sizeof(file_head), SEEK_SET);
 		while(sizeof(item_head) == fread(&item_head, 1, sizeof(item_head), cap_file)){
@@ -399,5 +402,6 @@ int main(int argc, char *argv[])
 	}while(count < times);
 	fclose(cap_file);
     record_dns_statistics();
+    fclose(g_fp);
     return 0;
 }
