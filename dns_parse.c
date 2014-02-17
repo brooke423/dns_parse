@@ -144,6 +144,12 @@ int record_dns_desc(struct dns_desc_item * item){
                 domain_print(g_fp,(__u8 *)item->da[i].rdata.cname,strlen(item->da[i].rdata.cname));
                 fprintf(g_fp,",");
                 break;
+            case DNS_ANSWER_TYPE_NS:
+                domain_print(g_fp,(__u8 *)item->da[i].name,strlen(item->da[i].name));
+                fprintf(g_fp,":NS:");
+                domain_print(g_fp,(__u8 *)item->da[i].rdata.ns,strlen(item->da[i].rdata.ns));
+                fprintf(g_fp,",");
+                break;
             default:
                 break;
         }
@@ -307,6 +313,9 @@ int pkt_parse_dns(struct dns_desc_item *item, char *l7_hdr, __u16 len)
                     break;
                 case DNS_ANSWER_TYPE_CNAME:
                     pquestion += pkt_parse_domain(pquestion,item->da[i].rdata.cname,l7_hdr);
+                    break;
+                case DNS_ANSWER_TYPE_NS:
+                    pquestion += pkt_parse_domain(pquestion,item->da[i].rdata.ns,l7_hdr);
                     break;
                 default:
                     printf("Error:unsupport answer type!!!\n");

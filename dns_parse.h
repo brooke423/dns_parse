@@ -74,6 +74,7 @@ struct dns_answer{
     union{
         __u32 host;
         char cname[DOMAIN_LEN];
+        char ns[DOMAIN_LEN];
     }rdata;
 };
 
