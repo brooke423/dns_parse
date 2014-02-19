@@ -5,6 +5,16 @@ char g_dns_parse_result_path[256];
 char g_dns_parse_statistics[256];
 FILE *g_fp;
 FILE *flog;
+char g_dns_rr_type_str[32][8] = {"0","A","NS","MD","MF",\
+                            "CNAME","SOA","MB","MG",\
+                            "MR","NULL","WKS","PRR",\
+                            "HINFO","MINFO","MX","TX",\
+                            "0","0","0","0","0","0",\
+                            "0","0","0","0","0","AXFR",\
+                            "MAILB","MAILA","ANY",};
+
+char g_dns_rr_class_str[8][8] = {"0","IN","CS","CH","HS",\
+                            "0","0","ANY",};
 
 /*
  * @return value
@@ -127,26 +137,30 @@ int record_dns_desc(struct dns_desc_item * item){
             item->dh.qr==0?"query":"response",item->dh.id);
     for(i = 0; i < item->dh.question_cnt; i++){
         domain_print(g_fp,(__u8 *)item->dq[i].qname,strlen(item->dq[i].qname));
-        fprintf(g_fp,",");
+        fprintf(g_fp,":%s:%s,",g_dns_rr_type_str[(item->dq[i].qtype&0x1f)],g_dns_rr_class_str[(item->dq[i].qclass&0x07)]);
     }
     
     /*answer*/
     fprintf(g_fp," answers=");
     for(i = 0; i < item->dh.answer_cnt; i++){
         switch(item->da[i].type){
-            case DNS_ANSWER_TYPE_A:
+            case DNS_RR_TYPE_A:
                 domain_print(g_fp,(__u8 *)item->da[i].name,strlen(item->da[i].name));
-                fprintf(g_fp,":HOST:%u.%u.%u.%u,",NIPQUAD(item->da[i].rdata.host));
+                fprintf(g_fp,":%s:%s:%d:%d:%u.%u.%u.%u,",g_dns_rr_type_str[(item->da[i].type)&0x1f],\
+                        g_dns_rr_class_str[(item->da[i].class)&0x07],\
+                        item->da[i].ttl,item->da[i].rdlength,NIPQUAD(item->da[i].rdata.host));
                 break;
-            case DNS_ANSWER_TYPE_CNAME:
+            case DNS_RR_TYPE_CNAME:
                 domain_print(g_fp,(__u8 *)item->da[i].name,strlen(item->da[i].name));
-                fprintf(g_fp,":CNAME:");
+                fprintf(g_fp,":%s:%s:%d:%d",g_dns_rr_type_str[(item->da[i].type)&0x1f],\
+                        g_dns_rr_class_str[(item->da[i].class)&0x07],item->da[i].ttl,item->da[i].rdlength);
                 domain_print(g_fp,(__u8 *)item->da[i].rdata.cname,strlen(item->da[i].rdata.cname));
                 fprintf(g_fp,",");
                 break;
-            case DNS_ANSWER_TYPE_NS:
+            case DNS_RR_TYPE_NS:
                 domain_print(g_fp,(__u8 *)item->da[i].name,strlen(item->da[i].name));
-                fprintf(g_fp,":NS:");
+                fprintf(g_fp,":%s:%s:%d:%d",g_dns_rr_type_str[(item->da[i].type)&0x1f],\
+                        g_dns_rr_class_str[(item->da[i].class)&0x07],item->da[i].ttl,item->da[i].rdlength);
                 domain_print(g_fp,(__u8 *)item->da[i].rdata.ns,strlen(item->da[i].rdata.ns));
                 fprintf(g_fp,",");
                 break;
@@ -307,14 +321,14 @@ int pkt_parse_dns(struct dns_desc_item *item, char *l7_hdr, __u16 len)
             item->da[i].rdlength = ntohs(*(__u16 *)pquestion);
             pquestion += 2;
             switch(item->da[i].type){
-                case DNS_ANSWER_TYPE_A:
+                case DNS_RR_TYPE_A:
                     item->da[i].rdata.host = *(__u32 *)pquestion;
                     pquestion += 4;
                     break;
-                case DNS_ANSWER_TYPE_CNAME:
+                case DNS_RR_TYPE_CNAME:
                     pquestion += pkt_parse_domain(pquestion,item->da[i].rdata.cname,l7_hdr);
                     break;
-                case DNS_ANSWER_TYPE_NS:
+                case DNS_RR_TYPE_NS:
                     pquestion += pkt_parse_domain(pquestion,item->da[i].rdata.ns,l7_hdr);
                     break;
                 default:

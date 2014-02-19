@@ -108,18 +108,48 @@ enum cmd_para{
  * MD              3 a mail destination (Obsolete - use MX)
  * MF              4 a mail forwarder (Obsolete - use MX)
  * CNAME           5 the canonical name for an alias
- * ...
- * ...
+ * SOA             6 marks the start of a zone of authority
+ * MB              7 a mailbox domain name (EXPERIMENTAL)
+ * MG              8 a mail group member (EXPERIMENTAL)
+ * MR              9 a mail rename domain name (EXPERIMENTAL)
+ * NULL            10 a null RR (EXPERIMENTAL)
+ * WKS             11 a well known service description
+ * PTR             12 a domain name pointer
+ * HINFO           13 host information
+ * MINFO           14 mailbox or mail list information
+ * MX              15 mail exchange
+ * TXT             16 text strings
  *
- * only support A and CNAME  //todo
+ * QTYPE fields appear in the question part of a query.  QTYPES are a
+ * superset of TYPEs, hence all TYPEs are valid QTYPEs.  In addition, the
+ * following QTYPEs are defined:
+ * AXFR            252 A request for a transfer of an entire zone
+ * MAILB           253 A request for mailbox-related records (MB, MG or MR)
+ * MAILA           254 A request for mail agent RRs (Obsolete - see MX)
+ * *               255 A request for all records
  * */
 
-enum dns_answer_type{
-	DNS_ANSWER_TYPE_A = 1,
-	DNS_ANSWER_TYPE_NS,
-	DNS_ANSWER_TYPE_MD,
-	DNS_ANSWER_TYPE_MF,
-	DNS_ANSWER_TYPE_CNAME,
+enum dns_rr_type{
+	DNS_RR_TYPE_A = 1,
+	DNS_RR_TYPE_NS,
+	DNS_RR_TYPE_MD,
+	DNS_RR_TYPE_MF,
+	DNS_RR_TYPE_CNAME,
+	DNS_RR_TYPE_SOA,
+	DNS_RR_TYPE_MB,
+	DNS_RR_TYPE_MG,
+	DNS_RR_TYPE_MR,
+	DNS_RR_TYPE_NULL,
+	DNS_RR_TYPE_WKS,
+	DNS_RR_TYPE_PTR,
+	DNS_RR_TYPE_HINFO,
+	DNS_RR_TYPE_MINFO,
+	DNS_RR_TYPE_MX,
+	DNS_RR_TYPE_TXT,
+	DNS_RR_TYPE_AXFR = 252,
+	DNS_RR_TYPE_MAILB,
+	DNS_RR_TYPE_MAILA,
+	DNS_RR_TYPE_ANY,
 };
 
 struct dns_statistics{
