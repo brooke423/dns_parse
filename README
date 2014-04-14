@@ -4,5 +4,5 @@ this is a test program to parse dns packet
 
 @input -- pcap file
 @output -- file which save dns query and dns response
-
+test
 release v1.0
